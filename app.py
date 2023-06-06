@@ -55,7 +55,13 @@ def greet():
 @app.get("/users")
 def get_users():
     result = [
-        {"name": u.name, "email": u.email, "id": u.public_id, "is_admin": u.is_admin}
+        {
+            "name": u.name,
+            "email": u.email,
+            "id": u.public_id,
+            "is_admin": u.is_admin,
+            "index": u.id
+        }
         for u in User.query.all()
     ]
     return jsonify(result)
@@ -82,7 +88,7 @@ def get_delete_user(id):
 
 # Create a new user or update an existing user's data
 @app.route("/user", methods=["POST", "PUT"])
-def create_user():
+def create_update_user():
     data = request.get_json()
 
     # Create a new user
@@ -99,7 +105,7 @@ def create_user():
         )
         db.session.add(new_user)
         db.session.commit()
-        return jsonify({"message": "User successfully created"}), 201
+        return {"message": "User successfully created"}, 201
 
     # Update an existing user's data partially or entirely
     elif request.method == "PUT":
@@ -112,6 +118,63 @@ def create_user():
         user.is_admin = data.get("is_admin", user.is_admin)
         db.session.commit()
         return {"message": "User data successfully updated"}
+
+
+# Retrieve all todos
+@app.get("/todos")
+def get_todos():
+    result = [
+        {"name": todo.name, "is_completed": todo.is_completed, "id": todo.public_id}
+        for todo in Todo.query.all()
+    ]
+    return jsonify(result)
+
+
+# Retrieve or delete a todo
+@app.route("/todo/<id>", methods=["GET", "DELETE"])
+def get_delete_todo(id):
+    todo = Todo.query.filter_by(public_id=id).first()
+    if not todo:
+        return {"error": "Todo not found"}, 404
+
+    # Retrieve a todo
+    if request.method == "GET":
+        result = {"name": todo.name, "is_completed": todo.is_completed}
+        return result
+
+    # Delete a todo
+    elif request.method == "DELETE":
+        db.session.delete(todo)
+        db.session.commit()
+        return {"message": "Todo discarded"}
+
+
+# Create a new todo or update an existing todo
+@app.route("/todo", methods=["POST", "PUT"])
+def create_update_todo():
+    data = request.get_json()
+
+    # Add a New Todo
+    if request.method == "POST":
+        new_todo = Todo(
+            name=data["name"], user_id=data["user_id"], public_id=str(uuid.uuid4())
+        )
+        print(
+            new_todo.name, new_todo.user_id, new_todo.public_id, new_todo.is_completed
+        )
+        db.session.add(new_todo)
+        db.session.commit()
+        return {"message": "Todo successfully added"}, 201
+    
+    # Update an Existing Todo
+    elif request.method == "PUT":
+        todo = Todo.query.filter_by(public_id=data["id"]).first()
+        if not todo:
+            return {"message": "Todo not found"}, 404
+        todo.name = data.get("name", todo.name)
+        todo.is_completed = data.get("is_completed", todo.is_completed)
+        db.session.commit()
+        return {"message": "Todo successfully updated"}
 
 
 if __name__ == "__main__":
