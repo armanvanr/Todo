@@ -1,0 +1,4 @@
+todovenv/
+__pycache__/
+migrations/
+.env
