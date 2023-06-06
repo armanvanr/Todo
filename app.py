@@ -57,17 +57,18 @@ def get_users():
     return jsonify(result)
 
 
-@app.get("/user/<id>")
-def get_user(id):
+@app.route("/user/<id>", methods=["GET", "DELETE"])
+def get_delete_user(id):
     user = User.query.filter_by(public_id=id).first()
     if not user:
         return {"error": "User not found"}, 404
-    result = {
-        "name": user.name,
-        "email": user.email,
-        "is_admin": user.is_admin
-    }
-    return result
+    if request.method == "GET":
+        result = {"name": user.name, "email": user.email, "is_admin": user.is_admin}
+        return result
+    elif request.method == "DELETE":
+        db.session.delete(user)
+        db.session.commit()
+        return {"message": "User successfully deleted"}, 200
 
 
 @app.post("/user")
