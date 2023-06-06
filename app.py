@@ -49,12 +49,25 @@ def greet():
 
 
 @app.get("/users")
-def get_user():
+def get_users():
     result = [
         {"name": u.name, "email": u.email, "id": u.public_id, "is_admin": u.is_admin}
         for u in User.query.all()
     ]
     return jsonify(result)
+
+
+@app.get("/user/<id>")
+def get_user(id):
+    user = User.query.filter_by(public_id=id).first()
+    if not user:
+        return {"error": "User not found"}, 404
+    result = {
+        "name": user.name,
+        "email": user.email,
+        "is_admin": user.is_admin
+    }
+    return result
 
 
 @app.post("/user")
@@ -63,12 +76,12 @@ def create_user():
     user = User.query.filter_by(email=data["email"]).first()
     if user:
         return {"error": f"User with email {data['email']} already exists"}, 400
-    
+
     new_user = User(
         name=data["name"],
         email=data["email"],
         public_id=str(uuid.uuid4()),
-        is_admin=data.get("is_admin", False)
+        is_admin=data.get("is_admin", False),
     )
     db.session.add(new_user)
     db.session.commit()
