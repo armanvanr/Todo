@@ -4,6 +4,7 @@ from flask_migrate import Migrate
 from dotenv import load_dotenv
 import os
 import uuid
+from flask_httpauth import HTTPTokenAuth
 
 load_dotenv()
 username = os.environ["USER_NAME"]
@@ -14,9 +15,12 @@ app = Flask(__name__)
 app.config[
     "SQLALCHEMY_DATABASE_URI"
 ] = f"postgresql://{username}:{password}@localhost:5432/dailytodos"
+app.config["SQLALCHEMY_TRACK_MODIFICATIONS"] = False
 db = SQLAlchemy(app)
 
 migrate = Migrate(app, db)
+
+auth = HTTPTokenAuth(scheme="Bearer")
 
 
 # Schema for User Table
@@ -27,6 +31,7 @@ class User(db.Model):
     email = db.Column(db.String, nullable=False, unique=True)
     public_id = db.Column(db.String, nullable=False)
     is_admin = db.Column(db.Boolean, default=False)
+    token = db.Column(db.String, nullable=True)
     todos = db.relationship("Todo", backref="owner", lazy="dynamic")
 
     def __repr__(self):
@@ -45,6 +50,19 @@ class Todo(db.Model):
         return f"Todo <{self.name}>"
 
 
+@auth.verify_token
+def verify_token(token):
+    user = User.query.filter_by(token=token).first()
+    if user and user.is_admin:
+        return user
+    return False
+
+
+@auth.error_handler
+def unauthorized():
+    return jsonify({"message": "Unauthorized access"}), 401
+
+
 # Route to greet
 @app.get("/")
 def greet():
@@ -53,16 +71,18 @@ def greet():
 
 # Retrieve all users
 @app.get("/users")
+@auth.login_required
 def get_users():
     result = [
         {
-            "name": u.name,
-            "email": u.email,
-            "id": u.public_id,
-            "is_admin": u.is_admin,
-            "index": u.id
+            "name": user.name,
+            "email": user.email,
+            "id": user.public_id,
+            "is_admin": user.is_admin,
+            "index": user.id,
+            "token": user.token
         }
-        for u in User.query.all()
+        for user in User.query.all()
     ]
     return jsonify(result)
 
@@ -102,6 +122,7 @@ def create_update_user():
             email=data["email"],
             public_id=str(uuid.uuid4()),
             is_admin=data.get("is_admin", False),
+            token = str(uuid.uuid4())
         )
         db.session.add(new_user)
         db.session.commit()
@@ -116,6 +137,7 @@ def create_update_user():
         user.name = data.get("name", user.name)
         user.email = data.get("email", user.email)
         user.is_admin = data.get("is_admin", user.is_admin)
+        user.token = data.get("token", str(uuid.uuid4()))
         db.session.commit()
         return {"message": "User data successfully updated"}
 
@@ -165,7 +187,7 @@ def create_update_todo():
         db.session.add(new_todo)
         db.session.commit()
         return {"message": "Todo successfully added"}, 201
-    
+
     # Update an Existing Todo
     elif request.method == "PUT":
         todo = Todo.query.filter_by(public_id=data["id"]).first()
